@@ -161,7 +161,7 @@ uint8_t BSP_LCD_Init(void)
   hLtdcHandler.Init.TotalWidth = (RK043FN48H_WIDTH + RK043FN48H_HSYNC + RK043FN48H_HBP + RK043FN48H_HFP - 1);
   
   /* LCD clock configuration */
-  BSP_LCD_ClockConfig(&hLtdcHandler, NULL);
+  //BSP_LCD_ClockConfig(&hLtdcHandler, NULL);
 
   /* Initialize the LCD pixel width and pixel height */
   hLtdcHandler.LayerCfg->ImageWidth  = RK043FN48H_WIDTH;
@@ -191,11 +191,6 @@ uint8_t BSP_LCD_Init(void)
 
   /* Assert backlight LCD_BL_CTRL pin */
   HAL_GPIO_WritePin(LCD_BL_CTRL_GPIO_PORT, LCD_BL_CTRL_PIN, GPIO_PIN_SET);
-
-#if !defined(DATA_IN_ExtSDRAM)
-  /* Initialize the SDRAM */
-  BSP_SDRAM_Init();
-#endif
     
   /* Initialize the font */
   BSP_LCD_SetFont(&LCD_DEFAULT_FONT);

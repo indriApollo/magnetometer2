@@ -34,14 +34,25 @@
 #include "main.h"
 
 /* USER CODE BEGIN Includes */
-#include "testimg.h"
-
+#include <math.h>
+//#include "testimg.h"
+//#include "lena888.h"
+//#include "RGB565_480x272.h"
+//#include "nilin.h"
+#include "avatar272.h"
 #include "stm32f7xx_hal.h"
 
 #include "stm32746g_discovery.h"
 #include "stm32746g_discovery_lcd.h"
 #include "stm32746g_discovery_sdram.h"
 #include "stm32746g_discovery_ts.h"
+
+#define IMGSIZE 482*272*2
+#define FB1 0xc0000000
+#define FB2 (FB1+IMGSIZE)
+
+static LTDC_LayerCfgTypeDef pLayerCfg;
+static LTDC_LayerCfgTypeDef pLayerCfg1;
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -62,21 +73,18 @@ void SystemClock_Config(void);
 void Error_Handler(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
-static void MX_DMA2D_Init(void);
 static void MX_LTDC_Init(void);
-static void MX_UART4_Init(void); // for bsp
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
+static void rotateImage(int16_t angle);
+const uint16_t *buf1 = avatar_272;
+uint16_t buf2[272*272];
+
 
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
-#define LCD_DISP_PIN                    GPIO_PIN_12
-#define LCD_DISP_GPIO_PORT              GPIOI
-
-#define LCD_BL_CTRL_PIN                  GPIO_PIN_3
-#define LCD_BL_CTRL_GPIO_PORT            GPIOK
 /* USER CODE END 0 */
 
 int main(void)
@@ -103,23 +111,39 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_I2C1_Init();
-  MX_DMA2D_Init();
   MX_LTDC_Init();
-  MX_UART4_Init();
+  BSP_SDRAM_Init();
 
   /* USER CODE BEGIN 2 */
-
+  //BSP_SDRAM_WriteData(FB1,(uint32_t*)&avatar_272, 272*272/2);
+  //BSP_SDRAM_WriteData(FB1,(uint32_t*)&RGB565_480x272, 65280);
+  //BSP_SDRAM_WriteData(FB2,(uint32_t*)&nilin_480x272, 65280);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  volatile uint8_t i = 0;
+  //volatile int8_t i = 1;
+  volatile int16_t ang = 0;
   while (1)
   {
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-	  i++;
+	  /*
+	  if(i>0)
+		  pLayerCfg.FBStartAdress = (uint32_t)buf1;
+	  else
+		  pLayerCfg.FBStartAdress = (uint32_t)buf2;
+
+	  HAL_LTDC_ConfigLayer(&hLtdcHandler, &pLayerCfg, 0);
+	  i = -i; // toggle
+
+	  HAL_Delay(2000);
+	  */
+	  rotateImage(ang);
+	  HAL_LTDC_ConfigLayer(&hLtdcHandler, &pLayerCfg, 0);
+	  ang++;
+	  //HAL_Delay(500);
   }
   /* USER CODE END 3 */
 
@@ -142,12 +166,13 @@ void SystemClock_Config(void)
 
     /**Initializes the CPU, AHB and APB busses clocks 
     */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = 16;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 25;
-  RCC_OscInitStruct.PLL.PLLN = 432;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 10;
+  RCC_OscInitStruct.PLL.PLLN = 250;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 2;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
@@ -171,20 +196,18 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_7) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_6) != HAL_OK)
   {
     Error_Handler();
   }
 
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC|RCC_PERIPHCLK_UART4
-                              |RCC_PERIPHCLK_I2C1;
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC|RCC_PERIPHCLK_I2C1;
   PeriphClkInitStruct.PLLSAI.PLLSAIN = 192;
-  PeriphClkInitStruct.PLLSAI.PLLSAIR = 5;
+  PeriphClkInitStruct.PLLSAI.PLLSAIR = 2;
   PeriphClkInitStruct.PLLSAI.PLLSAIQ = 2;
   PeriphClkInitStruct.PLLSAI.PLLSAIP = RCC_PLLSAIP_DIV2;
   PeriphClkInitStruct.PLLSAIDivQ = 1;
-  PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_4;
-  PeriphClkInitStruct.Uart4ClockSelection = RCC_UART4CLKSOURCE_PCLK1;
+  PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_16;
   PeriphClkInitStruct.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
@@ -201,30 +224,6 @@ void SystemClock_Config(void)
 
   /* SysTick_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
-}
-
-/* DMA2D init function */
-static void MX_DMA2D_Init(void)
-{
-
-  hdma2d.Instance = DMA2D;
-  hdma2d.Init.Mode = DMA2D_M2M;
-  hdma2d.Init.ColorMode = DMA2D_OUTPUT_ARGB8888;
-  hdma2d.Init.OutputOffset = 0;
-  hdma2d.LayerCfg[1].InputOffset = 0;
-  hdma2d.LayerCfg[1].InputColorMode = DMA2D_INPUT_ARGB8888;
-  hdma2d.LayerCfg[1].AlphaMode = DMA2D_NO_MODIF_ALPHA;
-  hdma2d.LayerCfg[1].InputAlpha = 0;
-  if (HAL_DMA2D_Init(&hdma2d) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  if (HAL_DMA2D_ConfigLayer(&hdma2d, 1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
 }
 
 /* I2C1 init function */
@@ -265,55 +264,22 @@ static void MX_I2C1_Init(void)
 static void MX_LTDC_Init(void)
 {
 	BSP_LCD_Init();
-  LTDC_LayerCfgTypeDef pLayerCfg;
-  LTDC_LayerCfgTypeDef pLayerCfg1;
-#if 0
-/* LTDC Initialization -------------------------------------------------------*/
 
-  /* Polarity configuration */
-  /* Initialize the horizontal synchronization polarity as active low */
-  hLtdcHandler.Init.HSPolarity = LTDC_HSPOLARITY_AL;
-  /* Initialize the vertical synchronization polarity as active low */
-  hLtdcHandler.Init.VSPolarity = LTDC_VSPOLARITY_AL;
-  /* Initialize the data enable polarity as active low */
-  hLtdcHandler.Init.DEPolarity = LTDC_DEPOLARITY_AL;
-  /* Initialize the pixel clock polarity as input pixel clock */
-  hLtdcHandler.Init.PCPolarity = LTDC_PCPOLARITY_IPC;
-
-  /* The RK043FN48H LCD 480x272 is selected */
-  /* Timing Configuration */
-  hLtdcHandler.Init.HorizontalSync = (RK043FN48H_HSYNC - 1);
-  hLtdcHandler.Init.VerticalSync = (RK043FN48H_VSYNC - 1);
-  hLtdcHandler.Init.AccumulatedHBP = (RK043FN48H_HSYNC + RK043FN48H_HBP - 1);
-  hLtdcHandler.Init.AccumulatedVBP = (RK043FN48H_VSYNC + RK043FN48H_VBP - 1);
-  hLtdcHandler.Init.AccumulatedActiveH = (RK043FN48H_HEIGHT + RK043FN48H_VSYNC + RK043FN48H_VBP - 1);
-  hLtdcHandler.Init.AccumulatedActiveW = (RK043FN48H_WIDTH + RK043FN48H_HSYNC + RK043FN48H_HBP - 1);
-  hLtdcHandler.Init.TotalHeigh = (RK043FN48H_HEIGHT + RK043FN48H_VSYNC + RK043FN48H_VBP + RK043FN48H_VFP - 1);
-  hLtdcHandler.Init.TotalWidth = (RK043FN48H_WIDTH + RK043FN48H_HSYNC + RK043FN48H_HBP + RK043FN48H_HFP - 1);
-
-  /* Configure R,G,B component values for LCD background color */
-  hLtdcHandler.Init.Backcolor.Blue = 0;
-  hLtdcHandler.Init.Backcolor.Green = 0;
-  hLtdcHandler.Init.Backcolor.Red = 0;
-
-  hLtdcHandler.Instance = LTDC;
-#endif
-
-  pLayerCfg.WindowX0 = 0;
-  pLayerCfg.WindowX1 = 480;
+  pLayerCfg.WindowX0 = 104;
+  pLayerCfg.WindowX1 = 480-104;
   pLayerCfg.WindowY0 = 0;
   pLayerCfg.WindowY1 = 272;
-  pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB888;
+  pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
   pLayerCfg.Alpha = 255;
   pLayerCfg.Alpha0 = 0;
   pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
   pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-  pLayerCfg.FBStartAdress = (uint32_t)&testimg;
+  pLayerCfg.FBStartAdress = (uint32_t)buf2;
   pLayerCfg.ImageWidth = 272;
   pLayerCfg.ImageHeight = 272;
-  pLayerCfg.Backcolor.Blue = 0;
-  pLayerCfg.Backcolor.Green = 0;
-  pLayerCfg.Backcolor.Red = 0;
+  pLayerCfg.Backcolor.Blue = 255;
+  pLayerCfg.Backcolor.Green = 255;
+  pLayerCfg.Backcolor.Red = 255;
   if (HAL_LTDC_ConfigLayer(&hLtdcHandler, &pLayerCfg, 0) != HAL_OK)
   {
     Error_Handler();
@@ -338,27 +304,6 @@ static void MX_LTDC_Init(void)
   {
     Error_Handler();
   }
-}
-
-/* UART4 init function */
-static void MX_UART4_Init(void)
-{
-
-  huart4.Instance = UART4;
-  huart4.Init.BaudRate = 115200;
-  huart4.Init.WordLength = UART_WORDLENGTH_7B;
-  huart4.Init.StopBits = UART_STOPBITS_1;
-  huart4.Init.Parity = UART_PARITY_NONE;
-  huart4.Init.Mode = UART_MODE_TX_RX;
-  huart4.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart4.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart4.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart4.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
 }
 
 /** Configure pins as 
@@ -386,7 +331,35 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void rotateImage(int16_t angle) {
+	float rad = angle/180.0f*M_PI;
+	float midX, midY;
+	float deltaX, deltaY;
+	int16_t rotX, rotY;
+	uint16_t x, y;
+	uint16_t height = 272;
+	uint16_t width = 272;
+	// Optimization: calc the sin and cos only once
+	float _sin = sin(rad);
+	float _cos = cos(rad);
 
+	midX = height / 2.0f; // 'f': single precision float
+	midY = height / 2.0f;
+
+	for(y = 0; y < width; y++) {
+		for(x = 0; x < height; x++) {
+			deltaX = y - midX;
+			deltaY = x - midY;
+			rotX = (int16_t)(midX + deltaX * _sin + deltaY * _cos);
+			// optimization: leave the loop early when we already know we'll be out of bounds
+			if(rotX < 0 || rotX >= width) continue;
+			rotY = (int16_t)(midY + deltaX * _cos - deltaY * _sin);
+			if(rotY >= 0 && rotY < height) {
+				*(buf2+(x * width + y)) = *(buf1+(rotX * width + rotY));
+			}
+		}
+	}
+}
 /* USER CODE END 4 */
 
 /**
