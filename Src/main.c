@@ -34,11 +34,7 @@
 #include "main.h"
 
 /* USER CODE BEGIN Includes */
-#include <math.h>
-//#include "testimg.h"
-//#include "lena888.h"
-//#include "RGB565_480x272.h"
-//#include "nilin.h"
+
 #include "avatar272.h"
 #include "stm32f7xx_hal.h"
 
@@ -46,6 +42,11 @@
 #include "stm32746g_discovery_lcd.h"
 #include "stm32746g_discovery_sdram.h"
 #include "stm32746g_discovery_ts.h"
+#include "lsm303.h"
+#include "graphics.h"
+
+static sample accSample;
+static sample magSample;
 
 #define IMGSIZE 482*272*2
 #define FB1 0xc0000000
@@ -57,11 +58,7 @@ static LTDC_LayerCfgTypeDef pLayerCfg1;
 
 /* Private variables ---------------------------------------------------------*/
 
-DMA2D_HandleTypeDef hdma2d;
-
 I2C_HandleTypeDef hi2c1;
-
-UART_HandleTypeDef huart4;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
@@ -77,9 +74,10 @@ static void MX_LTDC_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
-static void rotateImage(int16_t angle);
+
 const uint16_t *buf1 = avatar_272;
 uint16_t buf2[272*272];
+uint16_t fontBuffer[50*74*3];
 
 
 /* USER CODE END PFP */
@@ -116,34 +114,26 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
   //BSP_SDRAM_WriteData(FB1,(uint32_t*)&avatar_272, 272*272/2);
-  //BSP_SDRAM_WriteData(FB1,(uint32_t*)&RGB565_480x272, 65280);
-  //BSP_SDRAM_WriteData(FB2,(uint32_t*)&nilin_480x272, 65280);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  //volatile int8_t i = 1;
-  volatile int16_t ang = 0;
+  writeAccConfig(&hi2c1);
+  //writeMagConfig(&hi2c1);
+  HAL_Delay(100);
   while (1)
   {
+	  readAccSample(&hi2c1, &accSample);
+	  //readMagSample(&hi2c1, &magSample);
+
+	  angleText(atan2(accSample.z, accSample.x)*180.0f/M_PI, fontBuffer);
+	  cpyRotated(fontBuffer, (uint16_t*)FB1, 150, 74);
+	  HAL_Delay(100);
+
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-	  /*
-	  if(i>0)
-		  pLayerCfg.FBStartAdress = (uint32_t)buf1;
-	  else
-		  pLayerCfg.FBStartAdress = (uint32_t)buf2;
 
-	  HAL_LTDC_ConfigLayer(&hLtdcHandler, &pLayerCfg, 0);
-	  i = -i; // toggle
-
-	  HAL_Delay(2000);
-	  */
-	  rotateImage(ang);
-	  HAL_LTDC_ConfigLayer(&hLtdcHandler, &pLayerCfg, 0);
-	  ang++;
-	  //HAL_Delay(500);
   }
   /* USER CODE END 3 */
 
@@ -265,18 +255,18 @@ static void MX_LTDC_Init(void)
 {
 	BSP_LCD_Init();
 
-  pLayerCfg.WindowX0 = 104;
-  pLayerCfg.WindowX1 = 480-104;
+  pLayerCfg.WindowX0 = 0;
+  pLayerCfg.WindowX1 = 74;
   pLayerCfg.WindowY0 = 0;
-  pLayerCfg.WindowY1 = 272;
+  pLayerCfg.WindowY1 = 150;
   pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
   pLayerCfg.Alpha = 255;
   pLayerCfg.Alpha0 = 0;
   pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
   pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-  pLayerCfg.FBStartAdress = (uint32_t)buf2;
-  pLayerCfg.ImageWidth = 272;
-  pLayerCfg.ImageHeight = 272;
+  pLayerCfg.FBStartAdress = (uint32_t)FB1;
+  pLayerCfg.ImageWidth = 74;
+  pLayerCfg.ImageHeight = 150;
   pLayerCfg.Backcolor.Blue = 255;
   pLayerCfg.Backcolor.Green = 255;
   pLayerCfg.Backcolor.Red = 255;
@@ -331,35 +321,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void rotateImage(int16_t angle) {
-	float rad = angle/180.0f*M_PI;
-	float midX, midY;
-	float deltaX, deltaY;
-	int16_t rotX, rotY;
-	uint16_t x, y;
-	uint16_t height = 272;
-	uint16_t width = 272;
-	// Optimization: calc the sin and cos only once
-	float _sin = sin(rad);
-	float _cos = cos(rad);
-
-	midX = height / 2.0f; // 'f': single precision float
-	midY = height / 2.0f;
-
-	for(y = 0; y < width; y++) {
-		for(x = 0; x < height; x++) {
-			deltaX = y - midX;
-			deltaY = x - midY;
-			rotX = (int16_t)(midX + deltaX * _sin + deltaY * _cos);
-			// optimization: leave the loop early when we already know we'll be out of bounds
-			if(rotX < 0 || rotX >= width) continue;
-			rotY = (int16_t)(midY + deltaX * _cos - deltaY * _sin);
-			if(rotY >= 0 && rotY < height) {
-				*(buf2+(x * width + y)) = *(buf1+(rotX * width + rotY));
-			}
-		}
-	}
-}
 /* USER CODE END 4 */
 
 /**
