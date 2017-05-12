@@ -46,7 +46,7 @@
 #include "graphics.h"
 
 static sample accSample;
-static sample magSample;
+//static sample magSample;
 
 #define IMGSIZE 482*272*2
 #define FB1 0xc0000000
@@ -58,6 +58,7 @@ static LTDC_LayerCfgTypeDef pLayerCfg1;
 
 /* Private variables ---------------------------------------------------------*/
 
+UART_HandleTypeDef huart1;
 I2C_HandleTypeDef hi2c1;
 
 /* USER CODE BEGIN PV */
@@ -69,6 +70,7 @@ LTDC_HandleTypeDef hLtdcHandler;
 void SystemClock_Config(void);
 void Error_Handler(void);
 static void MX_GPIO_Init(void);
+static void MX_USART1_UART_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_LTDC_Init(void);
 
@@ -78,6 +80,7 @@ static void MX_LTDC_Init(void);
 const uint16_t *buf1 = avatar_272;
 uint16_t buf2[272*272];
 uint16_t fontBuffer[50*74*3];
+uint16_t fontBufferRtd[50*74*3];
 
 
 /* USER CODE END PFP */
@@ -108,9 +111,11 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_USART1_UART_Init();
   MX_I2C1_Init();
   MX_LTDC_Init();
   BSP_SDRAM_Init();
+  clearBuffer((uint16_t*)FB1, IMGSIZE, 0x0f0f);
 
   /* USER CODE BEGIN 2 */
   //BSP_SDRAM_WriteData(FB1,(uint32_t*)&avatar_272, 272*272/2);
@@ -121,13 +126,17 @@ int main(void)
   writeAccConfig(&hi2c1);
   //writeMagConfig(&hi2c1);
   HAL_Delay(100);
+  uint8_t msg[] = "UART IS WORKING !\n";
   while (1)
   {
 	  readAccSample(&hi2c1, &accSample);
 	  //readMagSample(&hi2c1, &magSample);
 
 	  angleText(atan2(accSample.z, accSample.x)*180.0f/M_PI, fontBuffer);
-	  cpyRotated(fontBuffer, (uint16_t*)FB1, 150, 74);
+	  cpyRotated(fontBuffer, fontBufferRtd, 150, 74);
+	  cpyToFb(fontBufferRtd, 74, 150, (uint16_t*)FB1, 480, 200, 50);
+	  HAL_UART_Transmit(&huart1, msg, sizeof(msg), 100);
+
 	  HAL_Delay(100);
 
   /* USER CODE END WHILE */
@@ -216,6 +225,27 @@ void SystemClock_Config(void)
   HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
 }
 
+/* USART1 init function */
+static void MX_USART1_UART_Init(void) // Uses USB ST-LINK (cn14)
+{
+
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 9600;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+}
+
 /* I2C1 init function */
 static void MX_I2C1_Init(void)
 {
@@ -256,17 +286,17 @@ static void MX_LTDC_Init(void)
 	BSP_LCD_Init();
 
   pLayerCfg.WindowX0 = 0;
-  pLayerCfg.WindowX1 = 74;
+  pLayerCfg.WindowX1 = 480;
   pLayerCfg.WindowY0 = 0;
-  pLayerCfg.WindowY1 = 150;
+  pLayerCfg.WindowY1 = 272;
   pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
   pLayerCfg.Alpha = 255;
   pLayerCfg.Alpha0 = 0;
   pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
   pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
   pLayerCfg.FBStartAdress = (uint32_t)FB1;
-  pLayerCfg.ImageWidth = 74;
-  pLayerCfg.ImageHeight = 150;
+  pLayerCfg.ImageWidth = 480;
+  pLayerCfg.ImageHeight = 272;
   pLayerCfg.Backcolor.Blue = 255;
   pLayerCfg.Backcolor.Green = 255;
   pLayerCfg.Backcolor.Red = 255;
@@ -276,17 +306,17 @@ static void MX_LTDC_Init(void)
   }
 
   pLayerCfg1.WindowX0 = 0;
-  pLayerCfg1.WindowX1 = 0;
+  pLayerCfg1.WindowX1 = 480;
   pLayerCfg1.WindowY0 = 0;
-  pLayerCfg1.WindowY1 = 0;
-  pLayerCfg1.PixelFormat = LTDC_PIXEL_FORMAT_RGB888;
+  pLayerCfg1.WindowY1 = 272;
+  pLayerCfg1.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
   pLayerCfg1.Alpha = 0;
   pLayerCfg1.Alpha0 = 0;
   pLayerCfg1.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
   pLayerCfg1.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-  pLayerCfg1.FBStartAdress = 0;
-  pLayerCfg1.ImageWidth = 0;
-  pLayerCfg1.ImageHeight = 0;
+  pLayerCfg1.FBStartAdress = (uint32_t)FB2;
+  pLayerCfg1.ImageWidth = 480;
+  pLayerCfg1.ImageHeight = 272;
   pLayerCfg1.Backcolor.Blue = 0;
   pLayerCfg1.Backcolor.Green = 0;
   pLayerCfg1.Backcolor.Red = 0;
@@ -337,33 +367,5 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler */ 
 }
-
-#ifdef USE_FULL_ASSERT
-
-/**
-   * @brief Reports the name of the source file and the source line number
-   * where the assert_param error has occurred.
-   * @param file: pointer to the source file name
-   * @param line: assert_param error line source number
-   * @retval None
-   */
-void assert_failed(uint8_t* file, uint32_t line)
-{
-  /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-    ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-  /* USER CODE END 6 */
-
-}
-
-#endif
-
-/**
-  * @}
-  */ 
-
-/**
-  * @}
-*/ 
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

@@ -83,3 +83,23 @@ void cpyRotated(uint16_t* src, uint16_t* dest, uint16_t srcWidth, uint16_t srcHe
 		}
 	}
 }
+
+void clearBuffer(uint16_t* buf, uint32_t bufSize, uint16_t clearVal)
+{
+	while(bufSize-- > 0) {
+		*buf++ = clearVal;
+	}
+}
+
+void cpyToFb(uint16_t* buf, uint16_t bufWidth, uint16_t bufHeight, uint16_t* fb, uint16_t fbWidth, uint16_t posx, uint16_t posy)
+{
+	fb += (fbWidth*posy)+posx;
+	uint16_t offset = fbWidth-bufWidth; // bufWidth better be < than fbWidth
+
+	for(uint16_t y = 0; y<bufHeight; y++) {
+		for(uint16_t x = 0; x<bufWidth; x++) {
+			*fb++ = *buf++;
+		}
+		fb+=offset;
+	}
+}
