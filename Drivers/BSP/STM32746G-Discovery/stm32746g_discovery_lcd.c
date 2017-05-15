@@ -174,8 +174,8 @@ uint8_t BSP_LCD_Init(void)
   
   /* Polarity */
   hLtdcHandler.Init.HSPolarity = LTDC_HSPOLARITY_AL;
-  hLtdcHandler.Init.VSPolarity = LTDC_VSPOLARITY_AL; 
-  hLtdcHandler.Init.DEPolarity = LTDC_DEPOLARITY_AL;  
+  hLtdcHandler.Init.VSPolarity = LTDC_VSPOLARITY_AL;
+  hLtdcHandler.Init.DEPolarity = LTDC_DEPOLARITY_AL;
   hLtdcHandler.Init.PCPolarity = LTDC_PCPOLARITY_IPC;
   hLtdcHandler.Instance = LTDC;
 

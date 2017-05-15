@@ -4,8 +4,10 @@
 
 #include <math.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
-void rotateImage(float angle, uint16_t* buf1, uint16_t* buf2);
+void rotateImage(float angle, uint16_t* buf1, uint16_t* buf2, uint16_t width, uint16_t height);
 
 void angleText(int16_t angle, uint16_t* fontBuffer);
 

@@ -1,6 +1,4 @@
 
-#include <stdio.h>
-#include <string.h>
 #include "graphics.h"
 #include "font09.h"
 
@@ -10,13 +8,12 @@
 #define N_CHARS				3
 #define FONTBUFFER_WIDTH	(FONT_WIDTH*N_CHARS)
 
-void rotateImage(float angle, uint16_t* buf1, uint16_t* buf2) {
+void rotateImage(float angle, uint16_t* buf1, uint16_t* buf2, uint16_t width, uint16_t height) {
 	float midX, midY;
 	float deltaX, deltaY;
 	int16_t rotX, rotY;
 	uint16_t x, y;
-	uint16_t height = 150;
-	uint16_t width = 74;
+
 	// Optimization: compute the sin and cos only once
 	float _sin = sin(angle);
 	float _cos = cos(angle);
@@ -45,7 +42,7 @@ void angleText(int16_t angle, uint16_t* fontBuffer)
 	snprintf((char*)strbuf, sizeof(strbuf), "%d", angle);
 
 	uint16_t *fontStart;
-	uint8_t strbufLen = strlen(strbuf);
+	uint8_t strbufLen = strlen((char*)strbuf);
 	uint16_t bgFillLen = (N_CHARS-strbufLen)*FONT_WIDTH/2; // compute the needed borders to center the chars
 	uint16_t* fontBufferPtr = fontBuffer;
 

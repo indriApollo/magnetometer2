@@ -1,72 +1,38 @@
-/**
-  ******************************************************************************
-  * File Name          : main.c
-  * Description        : Main program body
-  ******************************************************************************
-  *
-  * COPYRIGHT(c) 2017 STMicroelectronics
-  *
-  * Redistribution and use in source and binary forms, with or without modification,
-  * are permitted provided that the following conditions are met:
-  *   1. Redistributions of source code must retain the above copyright notice,
-  *      this list of conditions and the following disclaimer.
-  *   2. Redistributions in binary form must reproduce the above copyright notice,
-  *      this list of conditions and the following disclaimer in the documentation
-  *      and/or other materials provided with the distribution.
-  *   3. Neither the name of STMicroelectronics nor the names of its contributors
-  *      may be used to endorse or promote products derived from this software
-  *      without specific prior written permission.
-  *
-  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-  *
-  ******************************************************************************
-  */
-/* Includes ------------------------------------------------------------------*/
+
 #include "main.h"
 
-/* USER CODE BEGIN Includes */
-
-#include "avatar272.h"
+#include "arrow.h"
+#include "calib_icon.h"
+#include "calib_screen.h"
+#include "calib_loading.h"
 #include "stm32f7xx_hal.h"
 
 #include "stm32746g_discovery.h"
 #include "stm32746g_discovery_lcd.h"
 #include "stm32746g_discovery_sdram.h"
 #include "stm32746g_discovery_ts.h"
+
 #include "lsm303.h"
 #include "graphics.h"
+#include "uart.h"
 
-static sample accSample;
-//static sample magSample;
+#define LCD_WIDTH 480
+#define LCD_HEIGHT 272
+#define IMGSIZE (LCD_WIDTH*LCD_HEIGHT*2)
 
-#define IMGSIZE 482*272*2
 #define FB1 0xc0000000
 #define FB2 (FB1+IMGSIZE)
 
+static sample accSample;
+static sample magSample;
+
 static LTDC_LayerCfgTypeDef pLayerCfg;
 static LTDC_LayerCfgTypeDef pLayerCfg1;
-/* USER CODE END Includes */
-
-/* Private variables ---------------------------------------------------------*/
 
 UART_HandleTypeDef huart1;
 I2C_HandleTypeDef hi2c1;
-
-/* USER CODE BEGIN PV */
-/* Private variables ---------------------------------------------------------*/
 LTDC_HandleTypeDef hLtdcHandler;
-/* USER CODE END PV */
 
-/* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void Error_Handler(void);
 static void MX_GPIO_Init(void);
@@ -74,27 +40,18 @@ static void MX_USART1_UART_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_LTDC_Init(void);
 
-/* USER CODE BEGIN PFP */
-/* Private function prototypes -----------------------------------------------*/
+static void initScreen1(void);
+static void initScreen2(void);
 
-const uint16_t *buf1 = avatar_272;
+
+const uint16_t *buf1 = calib_screen;
 uint16_t buf2[272*272];
 uint16_t fontBuffer[50*74*3];
 uint16_t fontBufferRtd[50*74*3];
 
 
-/* USER CODE END PFP */
-
-/* USER CODE BEGIN 0 */
-/* USER CODE END 0 */
-
 int main(void)
 {
-
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
-
   /* Enable I-Cache-------------------------------------------------------------*/
   SCB_EnableICache();
 
@@ -114,38 +71,52 @@ int main(void)
   MX_USART1_UART_Init();
   MX_I2C1_Init();
   MX_LTDC_Init();
+  BSP_TS_Init(LCD_WIDTH, LCD_HEIGHT);
   BSP_SDRAM_Init();
-  clearBuffer((uint16_t*)FB1, IMGSIZE, 0x0f0f);
 
-  /* USER CODE BEGIN 2 */
-  //BSP_SDRAM_WriteData(FB1,(uint32_t*)&avatar_272, 272*272/2);
-  /* USER CODE END 2 */
+  initScreen1();
+  initScreen2();
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
+
+
   writeAccConfig(&hi2c1);
   //writeMagConfig(&hi2c1);
   HAL_Delay(100);
-  uint8_t msg[] = "UART IS WORKING !\n";
+
+  int16_t angle;
+  char msg[32];
+  float ang = 0;
+  TS_StateTypeDef ts_state;
+  uint8_t touchToggle = 0;
+  uint8_t screenToggle = 0;
   while (1)
   {
-	  readAccSample(&hi2c1, &accSample);
+	  /*readAccSample(&hi2c1, &accSample);
 	  //readMagSample(&hi2c1, &magSample);
-
-	  angleText(atan2(accSample.z, accSample.x)*180.0f/M_PI, fontBuffer);
+	  angle = (int16_t)(atan2(accSample.z, accSample.x)*180.0f/M_PI);
+	  angleText(angle, fontBuffer);
 	  cpyRotated(fontBuffer, fontBufferRtd, 150, 74);
 	  cpyToFb(fontBufferRtd, 74, 150, (uint16_t*)FB1, 480, 200, 50);
-	  HAL_UART_Transmit(&huart1, msg, sizeof(msg), 100);
+	  snprintf(msg, 32, "angle: %d", angle);
+	  uart_send(&huart1, msg);*/
+	  //rotateImage(ang, calib_loading, (uint16_t*)FB1, 90, 90);
+	  //ang += 0.314159f;
+	  BSP_TS_GetState(&ts_state);
+	  if(ts_state.touchDetected && ts_state.touchX[0] <= 64 && ts_state.touchY[0] >= 208) {
+		  if(!touchToggle) { // first time we touch
+			  touchToggle = 1;
 
-	  HAL_Delay(100);
-
-  /* USER CODE END WHILE */
-
-  /* USER CODE BEGIN 3 */
-
+			  HAL_LTDC_SetAlpha_NoReload(&hLtdcHandler, 0, screenToggle);
+			  screenToggle = !screenToggle;
+			  HAL_LTDC_SetAlpha_NoReload(&hLtdcHandler, 255, screenToggle);
+			  HAL_LTDC_Reload(&hLtdcHandler, LTDC_RELOAD_VERTICAL_BLANKING);
+		  }
+	  } else {
+		  touchToggle = 0; // reset touch
+	  }
+	  BSP_TS_ResetTouchData(&ts_state);
+	  HAL_Delay(20);
   }
-  /* USER CODE END 3 */
-
 }
 
 /** System Clock Configuration
@@ -251,7 +222,7 @@ static void MX_I2C1_Init(void)
 {
 
   hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x20404768;
+  hi2c1.Init.Timing = 0x20404768; // 100 khz
   hi2c1.Init.OwnAddress1 = 0;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
@@ -286,37 +257,37 @@ static void MX_LTDC_Init(void)
 	BSP_LCD_Init();
 
   pLayerCfg.WindowX0 = 0;
-  pLayerCfg.WindowX1 = 480;
+  pLayerCfg.WindowX1 = LCD_WIDTH;
   pLayerCfg.WindowY0 = 0;
-  pLayerCfg.WindowY1 = 272;
+  pLayerCfg.WindowY1 = LCD_HEIGHT;
   pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
   pLayerCfg.Alpha = 255;
   pLayerCfg.Alpha0 = 0;
   pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
   pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
   pLayerCfg.FBStartAdress = (uint32_t)FB1;
-  pLayerCfg.ImageWidth = 480;
-  pLayerCfg.ImageHeight = 272;
-  pLayerCfg.Backcolor.Blue = 255;
-  pLayerCfg.Backcolor.Green = 255;
-  pLayerCfg.Backcolor.Red = 255;
+  pLayerCfg.ImageWidth = LCD_WIDTH;
+  pLayerCfg.ImageHeight = LCD_HEIGHT;
+  pLayerCfg.Backcolor.Blue = 0;
+  pLayerCfg.Backcolor.Green = 0;
+  pLayerCfg.Backcolor.Red = 0;
   if (HAL_LTDC_ConfigLayer(&hLtdcHandler, &pLayerCfg, 0) != HAL_OK)
   {
     Error_Handler();
   }
 
   pLayerCfg1.WindowX0 = 0;
-  pLayerCfg1.WindowX1 = 480;
+  pLayerCfg1.WindowX1 = LCD_WIDTH;
   pLayerCfg1.WindowY0 = 0;
-  pLayerCfg1.WindowY1 = 272;
+  pLayerCfg1.WindowY1 = LCD_HEIGHT;
   pLayerCfg1.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
   pLayerCfg1.Alpha = 0;
   pLayerCfg1.Alpha0 = 0;
   pLayerCfg1.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
   pLayerCfg1.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
   pLayerCfg1.FBStartAdress = (uint32_t)FB2;
-  pLayerCfg1.ImageWidth = 480;
-  pLayerCfg1.ImageHeight = 272;
+  pLayerCfg1.ImageWidth = LCD_WIDTH;
+  pLayerCfg1.ImageHeight = LCD_HEIGHT;
   pLayerCfg1.Backcolor.Blue = 0;
   pLayerCfg1.Backcolor.Green = 0;
   pLayerCfg1.Backcolor.Red = 0;
@@ -326,13 +297,6 @@ static void MX_LTDC_Init(void)
   }
 }
 
-/** Configure pins as 
-        * Analog 
-        * Input 
-        * Output
-        * EVENT_OUT
-        * EXTI
-*/
 static void MX_GPIO_Init(void)
 {
 
@@ -350,22 +314,23 @@ static void MX_GPIO_Init(void)
 
 }
 
-/* USER CODE BEGIN 4 */
-/* USER CODE END 4 */
-
-/**
-  * @brief  This function is executed in case of error occurrence.
-  * @param  None
-  * @retval None
-  */
-void Error_Handler(void)
+static void initScreen1(void)
 {
-  /* USER CODE BEGIN Error_Handler */
-  /* User can add his own implementation to report the HAL error return state */
-  while(1) 
-  {
-  }
-  /* USER CODE END Error_Handler */ 
+	clearBuffer((uint16_t*)FB1, IMGSIZE, 0x0000);
+	angleText(0.0f, fontBuffer);
+	cpyRotated(fontBuffer, fontBufferRtd, 150, 74);
+	cpyToFb(fontBufferRtd, 74, 150, (uint16_t*)FB1, LCD_WIDTH, 400, 61);
+	cpyToFb(arrow, 272, 272, (uint16_t*)FB1, LCD_WIDTH, 100, 0);
+	cpyToFb(calib_icon, 64, 64, (uint16_t*)FB1, LCD_WIDTH, 0, 208);
 }
 
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
+static void initScreen2(void)
+{
+	cpyRotated(calib_screen, (uint16_t*)FB2, 272, 480);
+	cpyToFb(calib_loading, 90, 90, (uint16_t*)FB2, LCD_WIDTH, 20, 91);
+}
+
+void Error_Handler(void)
+{
+  while(1) {}
+}
