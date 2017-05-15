@@ -27,7 +27,7 @@ void readMagSample(I2C_HandleTypeDef *hi2c, sample* magSample)
 	uint8_t value[SAMPLE_SIZE];
 	HAL_I2C_Mem_Read(hi2c, I2C_ACC_READ, OUT_X_L_A|I2C_SUBADDR_MULTI, I2C_MEMADD_SIZE_8BIT, value, SAMPLE_SIZE, I2C_TIMEOUT);
 	// re-oder MSB,LSB
-	magSample->x = (int16_t)( ((uint16_t)value[0]<<8)|value[1] );
-	magSample->y = (int16_t)( ((uint16_t)value[4]<<8)|value[5] );
-	magSample->z = (int16_t)( ((uint16_t)value[2]<<8)|value[3] );
+	magSample->x = (int16_t)( (uint16_t)(value[0]<<8)|value[1] );
+	magSample->y = (int16_t)( (uint16_t)(value[4]<<8)|value[5] );
+	magSample->z = (int16_t)( (uint16_t)(value[2]<<8)|value[3] );
 }

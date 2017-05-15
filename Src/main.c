@@ -29,6 +29,11 @@ static sample magSample;
 static LTDC_LayerCfgTypeDef pLayerCfg;
 static LTDC_LayerCfgTypeDef pLayerCfg1;
 
+static TS_StateTypeDef ts_state;
+static uint8_t touchToggle = 0;
+static uint8_t screenToggle = 0;
+static float loadingRad = 0;
+
 UART_HandleTypeDef huart1;
 I2C_HandleTypeDef hi2c1;
 LTDC_HandleTypeDef hLtdcHandler;
@@ -42,10 +47,13 @@ static void MX_LTDC_Init(void);
 
 static void initScreen1(void);
 static void initScreen2(void);
+static void switchScreens(void);
+static void updateScreen1(float rad);
+static void updateScreen2(void);
 
-
-const uint16_t *buf1 = calib_screen;
-uint16_t buf2[272*272];
+// we have plenty of ram anyways
+uint16_t buf1[272*272];
+uint16_t buf2[90*90];
 uint16_t fontBuffer[50*74*3];
 uint16_t fontBufferRtd[50*74*3];
 
@@ -77,45 +85,33 @@ int main(void)
   initScreen1();
   initScreen2();
 
-
-
   writeAccConfig(&hi2c1);
-  //writeMagConfig(&hi2c1);
+  writeMagConfig(&hi2c1);
   HAL_Delay(100);
 
-  int16_t angle;
-  char msg[32];
-  float ang = 0;
-  TS_StateTypeDef ts_state;
-  uint8_t touchToggle = 0;
-  uint8_t screenToggle = 0;
+  float rad;
+  float p = 0.125;
+  float radprev = 0;
+  int16_t deg;
+  char msg[64];
+
   while (1)
   {
-	  /*readAccSample(&hi2c1, &accSample);
-	  //readMagSample(&hi2c1, &magSample);
-	  angle = (int16_t)(atan2(accSample.z, accSample.x)*180.0f/M_PI);
-	  angleText(angle, fontBuffer);
-	  cpyRotated(fontBuffer, fontBufferRtd, 150, 74);
-	  cpyToFb(fontBufferRtd, 74, 150, (uint16_t*)FB1, 480, 200, 50);
-	  snprintf(msg, 32, "angle: %d", angle);
-	  uart_send(&huart1, msg);*/
-	  //rotateImage(ang, calib_loading, (uint16_t*)FB1, 90, 90);
-	  //ang += 0.314159f;
-	  BSP_TS_GetState(&ts_state);
-	  if(ts_state.touchDetected && ts_state.touchX[0] <= 64 && ts_state.touchY[0] >= 208) {
-		  if(!touchToggle) { // first time we touch
-			  touchToggle = 1;
-
-			  HAL_LTDC_SetAlpha_NoReload(&hLtdcHandler, 0, screenToggle);
-			  screenToggle = !screenToggle;
-			  HAL_LTDC_SetAlpha_NoReload(&hLtdcHandler, 255, screenToggle);
-			  HAL_LTDC_Reload(&hLtdcHandler, LTDC_RELOAD_VERTICAL_BLANKING);
-		  }
-	  } else {
-		  touchToggle = 0; // reset touch
-	  }
-	  BSP_TS_ResetTouchData(&ts_state);
-	  HAL_Delay(20);
+	  //readAccSample(&hi2c1, &accSample);
+	  readMagSample(&hi2c1, &magSample);
+	  snprintf(msg, sizeof(msg), "mag: %d %d %d\n", magSample.x, magSample.y, magSample.z);
+	  uart_send(&huart1, msg);
+	  rad = (float)((1-p)*radprev + p*atan2(magSample.y, magSample.x));
+	  radprev = rad;
+	  deg = (int16_t)(rad*180.0f/M_PI);
+	  if(!screenToggle)
+		  updateScreen1(rad);
+	  else
+		  updateScreen2();
+	  //snprintf(msg, sizeof(msg), "angle: %d", deg);
+	  //uart_send(&huart1, msg);
+	  switchScreens();
+	  HAL_Delay(10);
   }
 }
 
@@ -328,6 +324,40 @@ static void initScreen2(void)
 {
 	cpyRotated(calib_screen, (uint16_t*)FB2, 272, 480);
 	cpyToFb(calib_loading, 90, 90, (uint16_t*)FB2, LCD_WIDTH, 20, 91);
+}
+
+static void switchScreens(void)
+{
+	BSP_TS_GetState(&ts_state);
+	if(ts_state.touchDetected && ts_state.touchX[0] <= 64 && ts_state.touchY[0] >= 208) {
+		if(!touchToggle) { // first time we touch
+			touchToggle = 1;
+
+			HAL_LTDC_SetAlpha_NoReload(&hLtdcHandler, 0, screenToggle);
+			screenToggle = !screenToggle;
+			HAL_LTDC_SetAlpha_NoReload(&hLtdcHandler, 255, screenToggle);
+			HAL_LTDC_Reload(&hLtdcHandler, LTDC_RELOAD_VERTICAL_BLANKING);
+		}
+	} else {
+		touchToggle = 0; // reset touch
+	}
+	BSP_TS_ResetTouchData(&ts_state);
+}
+
+static void updateScreen1(float rad)
+{
+	angleText((int16_t)(rad*180.0f/M_PI), fontBuffer);
+	cpyRotated(fontBuffer, fontBufferRtd, 150, 74);
+	cpyToFb(fontBufferRtd, 74, 150, (uint16_t*)FB1, LCD_WIDTH, 400, 61);
+	rotateImage(rad, arrow, buf1, 272, 272);
+	cpyToFb(buf1, 272, 272, (uint16_t*)FB1, LCD_WIDTH, 100, 0);
+}
+
+static void updateScreen2(void)
+{
+	rotateImage(loadingRad, calib_loading, buf2, 90, 90);
+	cpyToFb(buf2, 90, 90, (uint16_t*)FB2, LCD_WIDTH, 20, 91);
+	loadingRad += 0.31415926536;
 }
 
 void Error_Handler(void)
