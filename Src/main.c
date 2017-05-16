@@ -15,6 +15,9 @@
 #include "lsm303.h"
 #include "graphics.h"
 #include "uart.h"
+#include <math.h>
+
+#define HEADING_OFFSET 166
 
 #define LCD_WIDTH 480
 #define LCD_HEIGHT 272
@@ -48,7 +51,7 @@ static void MX_LTDC_Init(void);
 static void initScreen1(void);
 static void initScreen2(void);
 static void switchScreens(void);
-static void updateScreen1(float rad);
+static void updateScreen1(float rad, int16_t deg);
 static void updateScreen2(void);
 
 // we have plenty of ram anyways
@@ -85,33 +88,43 @@ int main(void)
   initScreen1();
   initScreen2();
 
-  writeAccConfig(&hi2c1);
+  //writeAccConfig(&hi2c1);
   writeMagConfig(&hi2c1);
   HAL_Delay(100);
 
   float rad;
-  float p = 0.125;
-  float radprev = 0;
-  int16_t deg;
+  float deg;
+  float p = 0.125f;
+  float degprev = 0;
   char msg[64];
+ int16_t heading;
 
   while (1)
   {
 	  //readAccSample(&hi2c1, &accSample);
 	  readMagSample(&hi2c1, &magSample);
-	  snprintf(msg, sizeof(msg), "mag: %d %d %d\n", magSample.x, magSample.y, magSample.z);
-	  uart_send(&huart1, msg);
-	  rad = (float)((1-p)*radprev + p*atan2(magSample.y, magSample.x));
-	  radprev = rad;
-	  deg = (int16_t)(rad*180.0f/M_PI);
-	  if(!screenToggle)
-		  updateScreen1(rad);
-	  else
+
+	  heading = ((int16_t)(HEADING_OFFSET-atan2(magSample.y, magSample.x)*180.0f/M_PI))%360;
+	  if(heading<0)
+		  heading += 360;
+
+	  deg = (1-p)*degprev + p*(float)heading;
+	  degprev = deg;
+	  rad = deg*M_PI/180.0f;
+
+	  if(!screenToggle) {
+		  updateScreen1(rad, (int16_t)deg);
+		  snprintf(msg, sizeof(msg), "angle: %d\n", (int16_t)deg);
+		  uart_send(&huart1, msg);
+	  }
+	  else {
 		  updateScreen2();
-	  //snprintf(msg, sizeof(msg), "angle: %d", deg);
-	  //uart_send(&huart1, msg);
+		  snprintf(msg, sizeof(msg), "mag: %d %d %d\n", magSample.x, magSample.y, magSample.z);
+		  uart_send(&huart1, msg);
+	  }
+
 	  switchScreens();
-	  HAL_Delay(10);
+	  HAL_Delay(20);
   }
 }
 
@@ -264,7 +277,7 @@ static void MX_LTDC_Init(void)
   pLayerCfg.FBStartAdress = (uint32_t)FB1;
   pLayerCfg.ImageWidth = LCD_WIDTH;
   pLayerCfg.ImageHeight = LCD_HEIGHT;
-  pLayerCfg.Backcolor.Blue = 0;
+  pLayerCfg.Backcolor.Blue = 255;
   pLayerCfg.Backcolor.Green = 0;
   pLayerCfg.Backcolor.Red = 0;
   if (HAL_LTDC_ConfigLayer(&hLtdcHandler, &pLayerCfg, 0) != HAL_OK)
@@ -344,9 +357,9 @@ static void switchScreens(void)
 	BSP_TS_ResetTouchData(&ts_state);
 }
 
-static void updateScreen1(float rad)
+static void updateScreen1(float rad, int16_t deg)
 {
-	angleText((int16_t)(rad*180.0f/M_PI), fontBuffer);
+	angleText(deg, fontBuffer);
 	cpyRotated(fontBuffer, fontBufferRtd, 150, 74);
 	cpyToFb(fontBufferRtd, 74, 150, (uint16_t*)FB1, LCD_WIDTH, 400, 61);
 	rotateImage(rad, arrow, buf1, 272, 272);

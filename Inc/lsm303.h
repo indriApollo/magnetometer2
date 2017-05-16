@@ -5,6 +5,10 @@
 #include <stdint.h>
 #include "stm32f7xx_hal.h"
 
+#define OFFSET_X 227
+#define OFFSET_Y 117
+#define OFFSET_Z -265
+
 #define I2C_ACC_READ	0x33
 #define I2C_ACC_WRITE	0x32
 #define I2C_MAG_READ	0x3d
@@ -34,6 +38,7 @@
 #define ACC_BDU			0x80
 #define MAG_30HZ		0x14
 #define MAG_CONTINUOUS	0x00
+#define MAG_SINGLE		0x01
 
 #define I2C_TIMEOUT		10
 #define SAMPLE_SIZE		6
