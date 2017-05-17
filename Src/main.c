@@ -88,12 +88,11 @@ int main(void)
   initScreen1();
   initScreen2();
 
-  //writeAccConfig(&hi2c1);
+  writeAccConfig(&hi2c1);
   writeMagConfig(&hi2c1);
   HAL_Delay(100);
 
-  float rad;
-  float deg;
+  float rad, deg, roll, pitch, rollCos, rollSin, pitchCos, pitchSin;
   float p = 0.125f;
   float degprev = 0;
   char msg[64];
@@ -101,8 +100,20 @@ int main(void)
 
   while (1)
   {
-	  //readAccSample(&hi2c1, &accSample);
+	  readAccSample(&hi2c1, &accSample);
 	  readMagSample(&hi2c1, &magSample);
+
+	  roll = atan2(accSample.y, accSample.z);
+	  rollCos = cos(roll);
+	  rollSin = sin(roll);
+	  magSample.y = (magSample.y*rollCos)-(magSample.z*rollSin);
+	  magSample.z = (magSample.y*rollSin)+(magSample.z*rollCos);
+	  accSample.z = (accSample.y*rollSin)+(accSample.z*rollCos);
+	  pitch = atan2(-accSample.x, accSample.z);
+	  pitchCos = cos(pitch);
+	  pitchSin = sin(pitch);
+	  magSample.x = (magSample.x*pitchCos)+(magSample.z*pitchSin);
+	  //magSample.z = (magSample.z*pitchSin)+(magSample.z*pitchCos);
 
 	  heading = ((int16_t)(HEADING_OFFSET-atan2(magSample.y, magSample.x)*180.0f/M_PI))%360;
 	  if(heading<0)
