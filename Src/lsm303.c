@@ -1,6 +1,11 @@
 
 #include "lsm303.h"
 
+// default values via sphere fit
+static int16_t OFFSET_X = 227;
+static int16_t OFFSET_Y = 117;
+static int16_t OFFSET_Z = -265;
+
 void writeAccConfig(I2C_HandleTypeDef *hi2c)
 {
 	uint8_t value[4] = {0};
@@ -30,4 +35,11 @@ void readMagSample(I2C_HandleTypeDef *hi2c, sample* magSample)
 	magSample->x = (int16_t)( (uint16_t)(value[0]<<8)|value[1] )+OFFSET_X;
 	magSample->y = (int16_t)( (uint16_t)(value[4]<<8)|value[5] )+OFFSET_Y;
 	magSample->z = (int16_t)( (uint16_t)(value[2]<<8)|value[3] )+OFFSET_Z;
+}
+
+void setMagCalibValues(sample offsets)
+{
+	OFFSET_X += offsets.x;
+	OFFSET_Y += offsets.y;
+	OFFSET_Z += offsets.z;
 }

@@ -18,6 +18,7 @@
 #include <math.h>
 
 #define HEADING_OFFSET 166
+#define CALIB_N_SAMPLES 200
 
 #define LCD_WIDTH 480
 #define LCD_HEIGHT 272
@@ -50,6 +51,7 @@ static void MX_LTDC_Init(void);
 
 static void initScreen1(void);
 static void initScreen2(void);
+static void checkTouch(void);
 static void switchScreens(void);
 static void updateScreen1(float rad, int16_t deg);
 static void updateScreen2(void);
@@ -96,46 +98,82 @@ int main(void)
   float p = 0.125f;
   float degprev = 0;
   char msg[64];
- int16_t heading;
+  int16_t heading;
+  sample caliMin;
+  sample caliMax;
+  uint16_t sampleCount =  CALIB_N_SAMPLES;
 
-  while (1)
+  while(1)
   {
-	  readAccSample(&hi2c1, &accSample);
+	  checkTouch();
+
 	  readMagSample(&hi2c1, &magSample);
 
-	  roll = atan2(accSample.y, accSample.z);
-	  rollCos = cos(roll);
-	  rollSin = sin(roll);
-	  magSample.y = (magSample.y*rollCos)-(magSample.z*rollSin);
-	  magSample.z = (magSample.y*rollSin)+(magSample.z*rollCos);
-	  accSample.z = (accSample.y*rollSin)+(accSample.z*rollCos);
-	  pitch = atan2(-accSample.x, accSample.z);
-	  pitchCos = cos(pitch);
-	  pitchSin = sin(pitch);
-	  magSample.x = (magSample.x*pitchCos)+(magSample.z*pitchSin);
-	  //magSample.z = (magSample.z*pitchSin)+(magSample.z*pitchCos);
-
-	  heading = ((int16_t)(HEADING_OFFSET-atan2(magSample.y, magSample.x)*180.0f/M_PI))%360;
-	  if(heading<0)
-		  heading += 360;
-
-	  deg = (1-p)*degprev + p*(float)heading;
-	  degprev = deg;
-	  rad = deg*M_PI/180.0f;
-
 	  if(!screenToggle) {
-		  updateScreen1(rad, (int16_t)deg);
-		  snprintf(msg, sizeof(msg), "angle: %d\n", (int16_t)deg);
+
+		  readAccSample(&hi2c1, &accSample);
+		  roll = atan2(accSample.y, accSample.z);
+		  rollCos = cos(roll);
+		  rollSin = sin(roll);
+		  magSample.y = (magSample.y*rollCos)-(magSample.z*rollSin);
+		  magSample.z = (magSample.y*rollSin)+(magSample.z*rollCos);
+		  accSample.z = (accSample.y*rollSin)+(accSample.z*rollCos);
+		  pitch = atan2(-accSample.x, accSample.z);
+		  pitchCos = cos(pitch);
+		  pitchSin = sin(pitch);
+		  magSample.x = (magSample.x*pitchCos)+(magSample.z*pitchSin);
+
+		  heading = ((int16_t)(HEADING_OFFSET-atan2(magSample.y, magSample.x)*180.0f/M_PI));
+		  // http://stackoverflow.com/a/5351925
+		  if(heading-degprev>180) degprev += 360;
+		  else if(heading-degprev<-180) heading+=360;
+		  deg = (1-p)*degprev + p*(float)heading;
+		  deg = (int16_t)deg%360;
+		  if(deg<0) deg += 360;
+		  degprev = deg;
+
+		  rad = deg*M_PI/180.0f;
+		  updateScreen1(-rad, (int16_t)deg);
+		  snprintf(msg, sizeof(msg), "angle: %d\n", deg);
 		  uart_send(&huart1, msg);
 	  }
 	  else {
 		  updateScreen2();
+
+		  if(sampleCount-- == CALIB_N_SAMPLES) {
+			  // init
+			  caliMax = magSample;
+			  caliMin = magSample;
+		  } else if(sampleCount>0){
+			  // process samples
+			  if(magSample.x>caliMax.x)
+				  caliMax.x = magSample.x;
+			  else if(magSample.y>caliMax.y)
+				  caliMax.y = magSample.y;
+			  else if(magSample.z>caliMax.z)
+				  caliMax.z = magSample.z;
+
+			  if(magSample.x<caliMin.x)
+				  caliMin.x = magSample.x;
+			  else if(magSample.y<caliMin.y)
+				  caliMin.y = magSample.y;
+			  else if(magSample.z<caliMin.z)
+				  caliMin.z = magSample.z;
+		  } else {
+			  // store calibration values and reset
+			  sampleCount = CALIB_N_SAMPLES;
+			  magSample.x = (caliMax.x-caliMin.x)/2;
+			  magSample.y = (caliMax.y-caliMin.y)/2;
+			  magSample.z = (caliMax.z-caliMin.z)/2;
+			  //setMagCalibValues(magSample);
+			  switchScreens();
+		  }
+
 		  snprintf(msg, sizeof(msg), "mag: %d %d %d\n", magSample.x, magSample.y, magSample.z);
 		  uart_send(&huart1, msg);
 	  }
 
-	  switchScreens();
-	  HAL_Delay(20);
+	  HAL_Delay(30);
   }
 }
 
@@ -352,22 +390,26 @@ static void initScreen2(void)
 	cpyToFb(calib_loading, 90, 90, (uint16_t*)FB2, LCD_WIDTH, 20, 91);
 }
 
-static void switchScreens(void)
+static void checkTouch(void)
 {
 	BSP_TS_GetState(&ts_state);
 	if(ts_state.touchDetected && ts_state.touchX[0] <= 64 && ts_state.touchY[0] >= 208) {
 		if(!touchToggle) { // first time we touch
 			touchToggle = 1;
-
-			HAL_LTDC_SetAlpha_NoReload(&hLtdcHandler, 0, screenToggle);
-			screenToggle = !screenToggle;
-			HAL_LTDC_SetAlpha_NoReload(&hLtdcHandler, 255, screenToggle);
-			HAL_LTDC_Reload(&hLtdcHandler, LTDC_RELOAD_VERTICAL_BLANKING);
+			switchScreens();
 		}
 	} else {
 		touchToggle = 0; // reset touch
 	}
 	BSP_TS_ResetTouchData(&ts_state);
+}
+
+static void switchScreens(void)
+{
+	HAL_LTDC_SetAlpha_NoReload(&hLtdcHandler, 0, screenToggle);
+	screenToggle = !screenToggle;
+	HAL_LTDC_SetAlpha_NoReload(&hLtdcHandler, 255, screenToggle);
+	HAL_LTDC_Reload(&hLtdcHandler, LTDC_RELOAD_VERTICAL_BLANKING);
 }
 
 static void updateScreen1(float rad, int16_t deg)

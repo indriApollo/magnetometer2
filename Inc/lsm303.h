@@ -5,10 +5,6 @@
 #include <stdint.h>
 #include "stm32f7xx_hal.h"
 
-#define OFFSET_X 227
-#define OFFSET_Y 117
-#define OFFSET_Z -265
-
 #define I2C_ACC_READ	0x33
 #define I2C_ACC_WRITE	0x32
 #define I2C_MAG_READ	0x3d
@@ -55,5 +51,7 @@ void readMagSample(I2C_HandleTypeDef *hi2c, sample* magSample);
 void writeAccConfig(I2C_HandleTypeDef *hi2c);
 
 void writeMagConfig(I2C_HandleTypeDef *hi2c);
+
+void setMagCalibValues(sample offsets);
 
 #endif /* LSM303_H_ */
