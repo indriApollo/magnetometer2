@@ -2,12 +2,6 @@
 #include "graphics.h"
 #include "font09.h"
 
-#define FONT_WIDTH			50
-#define FONT_HEIGHT			74
-#define FONT_SIZE 			(FONT_WIDTH*FONT_HEIGHT)
-#define N_CHARS				3
-#define FONTBUFFER_WIDTH	(FONT_WIDTH*N_CHARS)
-
 void rotateImage(float angle, uint16_t* buf1, uint16_t* buf2, uint16_t width, uint16_t height) {
 	float midX, midY;
 	float deltaX, deltaY;
@@ -88,7 +82,7 @@ void clearBuffer(uint16_t* buf, uint32_t bufSize, uint16_t clearVal)
 	}
 }
 
-void cpyToFb(uint16_t* buf, uint16_t bufWidth, uint16_t bufHeight, uint16_t* fb, uint16_t fbWidth, uint16_t posx, uint16_t posy)
+void cpyToFb(const uint16_t* buf, uint16_t bufWidth, uint16_t bufHeight, uint16_t* fb, uint16_t fbWidth, uint16_t posx, uint16_t posy)
 {
 	fb += (fbWidth*posy)+posx;
 	uint16_t offset = fbWidth-bufWidth; // bufWidth better be < than fbWidth

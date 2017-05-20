@@ -31,7 +31,7 @@ void readMagSample(I2C_HandleTypeDef *hi2c, sample* magSample)
 {
 	uint8_t value[SAMPLE_SIZE];
 	HAL_I2C_Mem_Read(hi2c, I2C_MAG_READ, OUT_X_H_M|I2C_SUBADDR_MULTI, I2C_MEMADD_SIZE_8BIT, value, SAMPLE_SIZE, I2C_TIMEOUT);
-	// re-oder MSB,LSB
+	// re-order MSB,LSB
 	magSample->x = (int16_t)( (uint16_t)(value[0]<<8)|value[1] )+OFFSET_X;
 	magSample->y = (int16_t)( (uint16_t)(value[4]<<8)|value[5] )+OFFSET_Y;
 	magSample->z = (int16_t)( (uint16_t)(value[2]<<8)|value[3] )+OFFSET_Z;
@@ -39,7 +39,8 @@ void readMagSample(I2C_HandleTypeDef *hi2c, sample* magSample)
 
 void setMagCalibValues(sample offsets)
 {
-	OFFSET_X += offsets.x;
-	OFFSET_Y += offsets.y;
-	OFFSET_Z += offsets.z;
+	// we subtract because the lsm303 is upside down
+	OFFSET_X -= offsets.x;
+	OFFSET_Y -= offsets.y;
+	OFFSET_Z -= offsets.z;
 }
